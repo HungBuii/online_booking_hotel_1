@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Mail\Websitemail;
 use App\Models\Admin;
+use App\Mail\Websitemail;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 class AdminLoginController extends Controller
 {
@@ -28,7 +29,7 @@ class AdminLoginController extends Controller
         ]);
 
         $admin_data = Admin::where('email', $request->email)->first();
-        if(!$admin_data) {
+        if (!$admin_data) {
             return redirect()->back()->with('error', 'Email address not found!');
         }
 
@@ -36,10 +37,10 @@ class AdminLoginController extends Controller
         $admin_data->token = $token;
         $admin_data->update();
 
-        $reset_link = url('admin/reset-password/'.$token.'/'.$request->email);
+        $reset_link = url('admin/reset-password/' . $token . '/' . $request->email);
         $subject = 'Reset password';
         $message = 'Please click on the following link: <br>';
-        $message .= '<a href="'.$reset_link.'">Click here</a>';
+        $message .= '<a href="' . $reset_link . '">Click here</a>';
 
         \Mail::to($request->email)->send(new Websitemail($subject, $message));
 
@@ -58,18 +59,43 @@ class AdminLoginController extends Controller
             'password' => $request->password
         ];
 
-        if (Auth::guard('admin')->attempt($credential)) 
-        {
+        if (Auth::guard('admin')->attempt($credential)) {
             return redirect()->route('admin_home');
         } else {
             return redirect()->route('admin_login')->with('error', 'Information is not correct');
         }
-        
+
     }
 
     public function logout()
     {
         Auth::guard('admin')->logout();
         return redirect()->route('admin_login');
+    }
+
+    public function reset_password($token, $email)
+    {
+        $admin_data = Admin::where('token', $token)->where('email', $email)->first();
+        if (!$admin_data) {
+            return redirect()->route('admin_login');
+        }
+
+        return view('admin.reset_password', compact('token', 'email'));
+    }
+
+    public function reset_password_submit(Request $request)
+    {
+        $request->validate([
+            'password' => 'required',
+            'retype_password' => 'required|same:password',
+        ]);
+
+        $admin_data = Admin::where('token', $request->token)->where('email', $request->email)->first();
+        $admin_data->token = '';
+        $admin_data->password = Hash::make($request->password);
+        
+        $admin_data->update();
+
+        return redirect()->route('admin_login')->with('success', 'Password is reset successfully');
     }
 }
